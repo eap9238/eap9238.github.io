@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+ 	<title>Book Finder</title>
+	<!-- Import jQuery -->
+    
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    
+    <script type="text/javascript" src="https://www.google.com/books/jsapi.js"></script>
+    
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBQfqx0SJlSfSkozau-OaxMzBfbkFn6yC4&callback=initMap"
+    async defer></script>
+ 
+    <script>
+        "use strict";
+
+        var GOOGLE_BOOK_URL = "https://www.googleapis.com/books/v1/volumes?q=";
+        var LIBRARY_URL = "https://www.worldcat.org/webservices/catalog/content/libraries/isbn/";
+        var SEARCH_TERM = "&filter=partial&langRestrict=en"; // this is hard-coded for testing purposes
+        var selectedISBN = "X";
+        var LIB_END = "?wskey=PFTWJd4ATCKlvrH5GzURWTBwfh0BZsFDxt2xBPQ9hGFaPkHIlJpaR6IHt0aKQLsIhRQeLpLz1lK5WPXS&location=" + "14623" + "&format=json";
+        var defaultStart = "1 Lomb Memorial Road, Rochester NY 14623";
+        var defaultEnd = "115 South Ave, Rochester, NY 14604";
+        //http://www.worldcat.org/webservices/catalog/content/libraries/isbn/9780596529260?wskey=PFTWJd4ATCKlvrH5GzURWTBwfh0BZsFDxt2xBPQ9hGFaPkHIlJpaR6IHt0aKQLsIhRQeLpLz1lK5WPXS&location=52205
+        var map;
+        var directionsService;
+        var directionsDisplay;
+
+        google.books.load();
+
+        window.onload = init;
+        
+        function init(){
+            document.querySelector("#search").onclick = getBookData;
+            document.querySelector("#back").onclick = startOver;
+            document.querySelector("#strtOvr").onclick = startOver;
+            document.querySelector("#reset").onclick = startOver;
+            document.querySelector("#findLbr").onclick = findLbr;
+            document.querySelector("#address").onclick = changeStartAddress;
+            
+            defaultStart = new google.maps.LatLng(google.loader.ClientLocation.latitude, google.loader.ClientLocation.longitude);
+        }   
+
+        // MY FUNCTIONS
+        function getBookData(){
+            // build up our URL string
+            var searchVal = encodeURI(document.getElementById('term').value);
+            
+            //console.log(searchVal);
+            
+            if (searchVal != "%20" && searchVal != "%20%20" && searchVal != "%20%20%20" && searchVal != "" && searchVal != null) {
+                if (document.querySelector("#searchParam").value != ""){
+                    var url = GOOGLE_BOOK_URL 
+                    url += searchVal + document.querySelector("#searchParam").value + searchVal + SEARCH_TERM;
+                }
+                else {
+                    var url = GOOGLE_BOOK_URL 
+                    url += searchVal + SEARCH_TERM;
+                }
+
+                // call the web service, and download the file
+                console.log("loading " + url);
+                $.ajax({
+                  dataType: "jsonp",
+                  url: url,
+                  data: null,
+                  success: bookSetLoad
+                });
+            }
+        }
+
+        function bookSetLoad(obj){
+            $("#title").fadeOut(500);
+
+            if(obj.error){
+                document.querySelector("#resultBox").innerHTML = ""; 
+                $("#resultBox").fadeIn(500);
+                return; // Bail out
+            }
+
+            if(obj.total_items == 0){
+                var status = "No results found";
+                document.querySelector("#resultBox").innerHTML = "";
+            
+                document.querySelector("#resultBox").appendChild(createStatusPara(status));
+
+                $("#resultBox").fadeIn(500);
+                
+                return;
+            }
+            
+            var allBooks = obj.items;
+
+            var booksSection = document.createElement('section');
+
+            for (var i = 0; i < allBooks.length; i++){
+                var book = allBooks[i].volumeInfo;
+                //console.dir(book);
+
+                var title = book.title;
+                if (!title) title = null;
+
+                var subTitle = book.subtitle;
+                if (!subTitle) subTitle = null;
+
+                var author = book.authors;
+                if (!author) author = null;
+
+                var img = book.imageLinks.thumbnail;
+                if (!img) img = "https://www.barebooks.com/wp-content/uploads/2013/10/2705.gif";
+
+                var description = book.description;
+                if (!description) description = null;
+                
+                var isbn;
+                if (book.industryIdentifiers) {
+                    if (book.industryIdentifiers[0].type == "ISBN_13" || book.industryIdentifiers[0].type == "ISBN_10") {
+                        isbn = book.industryIdentifiers[0].identifier;
+                    } 
+                    else {
+                        isbn = null;
+                    }
+                } 
+                else {
+                    isbn = null;
+                }
+
+                var id = allBooks[i].id;
+                if (!id) id = null;
+
+                var containerDiv = document.createElement('div');
+                containerDiv.classList.add('searchResult');
+                
+                var bookDiv = document.createElement('div');
+                bookDiv.classList.add('searchContent');
+
+                var readBtn = document.createElement('button');
+                readBtn.innerHTML = "Read Book";
+                
+                var lbrBtn = document.createElement('button');
+                lbrBtn.innerHTML = "Find Library";
+                
+                lbrBtn.onclick = (function (isbn) {
+                    if (isbn != null) {
+                        return function() {
+                            selectedISBN = isbn;
+                            
+                            findLbr();
+                        }
+                    }
+                    else {
+                        return function() {
+                            selectedISBN = "NOT_AVAILABLE";
+                            
+                            findLbr();
+                        }
+                    }
+                })(isbn);
+                
+                readBtn.onclick = (function (isbn, id) {
+                    if (isbn != null) {
+                        return function() {
+                            test(isbn, id);
+                        }
+                    }
+                    else {
+                        return function() {
+                            test("NOT_AVAILABLE", id);
+                        }
+                    }
+                })(isbn, id);
+
+                if (title) {
+                    var titlePara = document.createElement('p');
+                    titlePara.classList.add('bold');
+                    titlePara.innerHTML = title; //they return HTML in the response so textContent will not work
+                    bookDiv.appendChild(titlePara);
+                }
+
+                if (subTitle) {
+                    var subPara = document.createElement('p');
+                    subPara.innerHTML = subTitle; //they return HTML in the response so textContent will not work
+                    bookDiv.appendChild(subPara);
+                }
+
+                if (img) {            
+                    var imgTag = document.createElement('img');
+                    imgTag.src = img;
+                    bookDiv.appendChild(imgTag);
+                    //console.log(img);
+                    //console.dir(imgTag);
+                }
+
+                if (author) {
+                    var subPara = document.createElement('p');
+
+                    for (var j = 0; j < author.length; j++) {
+                        subPara.innerHTML += author[j]; 
+
+                        if (j < author.length - 1) {
+                            subPara.innerHTML +=", "; 
+                        }
+                    }
+                    bookDiv.appendChild(subPara);
+                }
+
+                if (description) {
+                    var descPara = document.createElement('p');
+                    descPara.classList.add('italic');
+                    descPara.innerHTML = description; //they return HTML in the response so textContent will not work
+                    bookDiv.appendChild(descPara);
+                }
+                    
+                containerDiv.appendChild(bookDiv);
+                containerDiv.appendChild(lbrBtn);
+                containerDiv.appendChild(readBtn);
+                    
+                booksSection.appendChild(containerDiv);
+            }
+
+            document.querySelector("#bookContent").innerHTML = '';
+            document.querySelector("#bookContent").appendChild(booksSection);
+            $("#resultBox").fadeIn(500);
+        }	
+
+        function getLibraryData(){            
+            var url = LIBRARY_URL 
+            url += selectedISBN + LIB_END;
+            
+            console.log(url);
+            
+            $.ajax({
+                dataType: "jsonp",
+                url: url,
+                data: null,
+                success: librarySetLoad
+            });
+        }
+        
+        function librarySetLoad(isbn){
+           // if there's an error, print a message and return            
+            if(isbn.error){
+                document.querySelector("#lbrContent").innerHTML = "";
+                $("#lbrContent").fadeIn(500);
+                return; // Bail out
+            }
+
+            // if there are no results, print a message and return
+            if(isbn.total_items == 0){
+                var status = "No results found";
+                
+                var mapBtn = document.createElement('button');
+                mapBtn.innerHTML = "Rochester Public Library";
+
+                mapBtn.onclick = (function () {
+                    return function() {
+                        alert("There has been an error with the worldCAT API, this button will instead direct you to the Rochester Public Library.")
+                        defaultEnd = "115 South Ave, Rochester, NY 14604";
+                        findMap();
+                    }
+                })();
+                
+                document.querySelector("#lbrContent").appendChild(mapBtn);
+                $("#lbrContent").fadeIn(500);                            
+            }
+
+            var allLbrs = isbn.library;
+
+            var lbrsSection = document.createElement('section');
+
+            if (allLbrs){
+                for (var i = 0; i < allLbrs.length; i++){
+                var lbr = allLbrs[i];
+                //console.dir(lbr);
+
+                var title = lbr.institutionName;
+                if (!title) title = null;
+
+                var address = lbr.streetAddress1 + " " + lbr.streetAddress2 + ", " + lbr.city + " " + lbr.state + ", " + lbr.postalCode;
+                if (!address) address = null;
+
+                var containerDiv = document.createElement('div');
+                containerDiv.classList.add('searchResult');
+
+                var lbrDiv = document.createElement('div');
+                lbrDiv.classList.add('searchContent');
+                
+                var mapBtn = document.createElement('button');
+                mapBtn.innerHTML = "Lead me here";
+
+                mapBtn.onclick = (function (address) {
+                    return function() {
+                        defaultEnd = address;
+                        findMap();
+                }
+                    
+                })(address);
+
+                if (title) {
+                    var titlePara = document.createElement('p');
+                    titlePara.classList.add('bold');
+                    titlePara.innerHTML = title; //they return HTML in the response so textContent will not work
+                    lbrDiv.appendChild(titlePara);
+                }
+
+                if (address) {
+                    var subPara = document.createElement('p');
+                    subPara.innerHTML = address; //they return HTML in the response so textContent will not work
+                    lbrDiv.appendChild(subPara);
+                }
+                    
+                containerDiv.appendChild(lbrDiv);
+                containerDiv.appendChild(mapBtn);
+                    
+                lbrsSection.appendChild(containerDiv);
+            }
+            }
+
+            document.querySelector("#lbrContent").innerHTML = '';
+            document.querySelector("#lbrContent").appendChild(lbrsSection);
+            $("#lbrContent").fadeIn(500);
+        }	
+
+        function initialize(id) {
+            //console.log(HTMLBodyElement.height);
+            
+            //document.getElementById('viewerCanvas').style.height = '100%';
+            
+            var viewer = new google.books.DefaultViewer(document.getElementById('viewerCanvas'));
+            viewer.load(id);
+        }
+
+        function test(str, id) {
+            selectedISBN = str;
+            //console.log(id);
+            //console.log(selectedISBN);
+            
+            $("#lbrBox").fadeOut(500);
+            $("#resultBox").fadeOut(500);
+            $("#viewBox").fadeIn(500);
+            $("#mapBox").fadeOut(500);
+            $("#searchBox").fadeOut(500);
+            $("#title").fadeOut(500);
+
+            initialize(id);
+        }     
+
+        function startOver() {        
+            $("#lbrBox").fadeOut(500);
+            $("#resultBox").fadeOut(500);
+            $("#viewBox").fadeOut(500);
+            $("#mapBox").fadeOut(500);
+            $("#searchBox").fadeIn(500);
+            $("#title").fadeIn(500);
+        }  
+
+        function findLbr() {
+            
+            $("#lbrBox").fadeIn(500);
+            $("#resultBox").fadeOut(500);
+            $("#viewBox").fadeOut(500);
+            $("#mapBox").fadeOut(500);
+            $("#searchBox").fadeOut(500);
+            $("#title").fadeOut(500);
+            
+            getLibraryData();
+
+            if (selectedISBN == "NOT_AVAILABLE") {            
+                var btn = document.createElement("button");
+                btn.id = "debugPush";
+                
+                btn.onclick = (function (){
+                    return function(){
+                        findMap();
+                    }
+                })()
+            }
+            else {
+                document.querySelector("#lbrContent").innerHTML = selectedISBN;
+            }
+        }  
+
+        function findMap() {        
+            $("#lbrBox").fadeOut(500);
+            $("#resultBox").fadeOut(500);
+            $("#viewBox").fadeOut(500);
+            $("#mapBox").fadeIn(500);
+            $("#searchBox").fadeOut(500);
+            $("#title").fadeOut(500);
+            
+            alert("User location projections are based on IP. Please feel free to correct using the 'Change Home' box. A blank buttonpress will default to RIT.");
+            
+            initMap();
+            calcRoute();
+        } 
+        
+        function changeStartAddress() {
+            defaultStart = document.getElementById('addr').value;
+            if (defaultStart == null || defaultStart == "") {
+                defaultStart = document.getElementById('addr').value = "1 Lomb Memorial Drive, Rochester New York, 14623";
+                
+            }
+                        
+            calcRoute();
+        }
+        
+        function initMap() {
+            directionsService = new google.maps.DirectionsService();
+            directionsDisplay = new google.maps.DirectionsRenderer();
+            
+            var mapOptions = {
+                zoom:7,
+                center:  new google.maps.LatLng(google.loader.ClientLocation.latitude, google.loader.ClientLocation.longitude)
+            }
+            
+            var map = new google.maps.Map(document.getElementById('map'), mapOptions);
+            directionsDisplay.setMap(map);
+        }
+        
+        function calcRoute() {
+            if (google.loader.ClientLocation) {
+                var start = defaultStart;
+                var end = defaultEnd;
+
+                console.log(start + ", " + end);
+
+                var request = {
+                    origin: start,
+                    destination: end,
+                    travelMode: 'DRIVING'
+                };
+
+                directionsService.route(request, function(result, status) {
+                    if (status == 'OK') {
+                        directionsDisplay.setDirections(result);
+                    }
+                });
+                }
+        }
+    </script>
+    <style>
+        body{
+            background-color: #757780;
+        }
+        
+        *{
+            font-family:verdana,tahoma,sans-serif;
+            color: #001011;
+        }
+
+        img{
+            display:block;
+        }
+
+        #searchBox{
+            padding: 10px;
+            border-radius: 10px;
+            background-color: #FFFFFC;
+        }
+        
+        #resultBox{
+            padding: 10px;
+            border-radius: 10px;
+            background-color: #FFFFFC;
+            height: 100%;
+        }
+        
+        .searchContent {
+            float:center;
+            padding:10px;
+            width:90%;
+            height:70%;
+            overflow: auto;
+            margin: auto;
+        }
+
+        .searchResult {
+            float:left;
+            padding:10px;
+            border:1px solid gray;
+            width:200px;
+            height:240px;
+            margin-left:10px;
+            margin-bottom:10px;
+            border-radius: 10px;
+            background-color: #FFFFFC;
+            border-color: #757780;
+            border-width: 5px;
+        }
+        
+        .searchResult button{
+            width: 40%;
+            margin: 5%;
+        }
+        
+        button {
+            background-color: #98CE00; 
+            border: none;
+            color: white;
+            padding: 6px 8px;
+            margin: 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .floater{
+            font-size: : 11px;
+            position: absolute;
+            font-weight: bold;
+            height: 30px;
+            width: 130px;
+            z-index: 100;
+            
+            top: 70px;
+            left: 10px;
+        }
+
+        .bold {
+            font-weight: bold;
+        }
+
+        .italic {
+            font-style: italic;
+        }
+
+            /* Always set the map height explicitly to define the size of the div
+           * element that contains the map. */
+        #map {
+            height: 100vh;
+            
+        }
+
+        /* Optional: Makes the sample page fill the window. */
+        html, body {
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    
+  </style>
+  
+</head>
+<body>
+<h1 id="title" style="margin: auto; text-align: center; padding: 60px; font-size: 60px;">Find me a Book</h1>
+
+<div id="searchBox" style="margin: 2em;">
+    <select id="searchParam">
+        <option value="" selected>All</option>
+        <option value="+intitle:">Title</option>
+        <option value="+inauthor:">Author</option>
+        <option value="+inpublisher:">Publisher</option>
+        <option value="+subject:">Subject</option>
+        <option value="+isbn:">ISBN</option>
+    </select> 
+    
+    <input type="text" id="term"><br>
+    <button type="button" id="search" style="background-color: #6CCFF6">Search</button>
+</div>
+    
+<div id="resultBox" style="display: none; margin: 2em;">
+    <h2>Results</h2>
+     <div id="bookContent"></div>
+</div>
+    
+<div id="viewBox" style="display: none;">
+    <button type="button" class="floater" id="back" style="top: 10px;">Go Back</button>
+    <div id="viewerCanvas" style="height: 99vh; width: 100%;"></div>
+    <button type="button" class="floater" id="findLbr">Find library</button>
+</div>
+ 
+<div id="lbrBox" style="display: none; margin: 2em;"> 
+    <button type="button" id="strtOvr" style="margins: 10px; background-color: #6CCFF6;">Start over</button>
+     <div id="lbrContent">
+     <p>No data yet!</p>
+     </div>
+</div>
+    
+<div id="mapBox" style="display: none; height: 100%;">
+    <button type="button" id="reset" class="floater">Start over</button>
+    <button type="button" id="address" class="floater" style="top: 120px;">Change Home</button>
+    <input type="text" id="addr" class="floater" style="top: 150px;"><br>
+    <div id="map"></div>
+</div>
+    
+</body>
+</html>
