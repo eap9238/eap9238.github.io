@@ -11,14 +11,14 @@
     
     <script type="text/javascript" src="https://www.google.com/jsapi"></script>
     
-    <script src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBQfqx0SJlSfSkozau-OaxMzBfbkFn6yC4&callback=initMap"
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBQfqx0SJlSfSkozau-OaxMzBfbkFn6yC4&callback=initMap"
     async defer></script>
  
     <script>
         "use strict";
 
         var GOOGLE_BOOK_URL = "https://www.googleapis.com/books/v1/volumes?q=";
-        var LIBRARY_URL = "https://www.worldcat.org/webservices/catalog/content/libraries/isbn/";
+        var LIBRARY_URL = "http://www.worldcat.org/webservices/catalog/content/libraries/isbn/";
         var SEARCH_TERM = "&filter=partial&langRestrict=en"; // this is hard-coded for testing purposes
         var selectedISBN = "X";
         var LIB_END = "?wskey=PFTWJd4ATCKlvrH5GzURWTBwfh0BZsFDxt2xBPQ9hGFaPkHIlJpaR6IHt0aKQLsIhRQeLpLz1lK5WPXS&location=" + "14623" + "&format=json";
