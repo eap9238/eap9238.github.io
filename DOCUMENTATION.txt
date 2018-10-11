@@ -1,26 +1,28 @@
 Project: Book Finder
 Student: Eleanor Post
 
-Current project state: Prototype
+Current project state: COMPLETE
 Current APIs used: Google Books API (search version and viewer 
-initalization and embed version), Google Maps API
-APIs planned to implement: WorldCAT search API
+initalization and embed version), Google Maps API, Google 
+Locations API, WorldCAT search API (through HTTPS gate)
+
 
 How to use:
 You enter a search term into the box at the top of the screen 
-(this will later allow you to select which fields this searches, 
-for now it does all of them), and then select the search button. 
+and can select a search field to specify into, and then select 
+the search button. 
+
 This will bring up a list of boxes containing search information. 
-You click on a box and it will slide you to a viewer that displays 
-exerpts from the book. You can scroll through it and read from it, 
+You can click on the buttons below the a box and it will slide you to a viewer that displays 
+exerpts from the book or to the library search. You can scroll through it and read from it, 
 and use the buyer links on it, or you can select find a library. 
 That will pull up the ISBN number of the book, and load that to 
-the screen (this will be used to search worldCAT). For now, an 
-override button exists to bypass selecting a library. Select the 
-debug button and a map will open to show a route from your current 
-location to the Rochester Public Library. Each step has a button 
+the screen, which looks like the book search API, but only has 
+buttons that indicate locations for libraries. Select the find it
+button and a map will open to show a route from your current 
+location to the Rochester Public Library. The library tab has
+a search box to reset the start locations. Each step has a button 
 that will return you to the first view to pick/search for a new 
 book. 
 
-Current formatting is limited at best. This will be improved in the 
-final iteration.
+the google lcations API is used to limit use of html popups requesting permissions.
